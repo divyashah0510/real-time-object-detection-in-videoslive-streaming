@@ -10,7 +10,7 @@ This repository contains the code for real time object detection using YoloV10 a
 ## Installation
 1. Clone the repository
 ```bash
-git clone
+git clone https://github.com/divyashah0510/real-time-object-detection-in-videoslive-streaming.git
 ```
 2. Install the required packages
 ```bash
