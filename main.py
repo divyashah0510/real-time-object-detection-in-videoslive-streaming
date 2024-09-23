@@ -107,23 +107,24 @@ if "is_webcam_active" not in st.session_state:
     st.session_state.is_webcam_active = False
 
 
-# Request camera permission using JavaScript
+# Function to request camera permission using JavaScript
 def request_camera_permission():
     # JavaScript to request camera permission
     st.components.v1.html(
         """
-    <script>
-        async function requestCamera() {
-            try {
-                await navigator.mediaDevices.getUserMedia({ video: true });
-                return true; // Permission granted
-            } catch (error) {
-                console.error("Error accessing camera: ", error);
-                return false; // Permission denied
+        <script>
+            async function requestCamera() {
+                try {
+                    await navigator.mediaDevices.getUserMedia({ video: true });
+                    window.parent.postMessage("permission_granted", "*");
+                } catch (error) {
+                    console.error("Error accessing camera: ", error);
+                    window.parent.postMessage("permission_denied", "*");
+                }
             }
-        }
-    </script>
-    """,
+            requestCamera();
+        </script>
+        """,
         height=0,
     )
 
@@ -134,92 +135,115 @@ def live_streaming(conf_threshold, selected_classes):
 
     # Request camera permission
     request_camera_permission()
-    permission_granted = st.session_state.get("camera_permission", False)
 
-    if permission_granted is None:
-        permission_granted = st.session_state.camera_permission = st.button(
-            "Enable Camera Access"
+    # Wait for the JavaScript to set camera permission
+    if "camera_permission" not in st.session_state:
+        st.session_state.camera_permission = False
+
+    # Create a placeholder for message
+    permission_message = st.empty()
+
+    # Check for messages from the JavaScript
+    if st.session_state.camera_permission is False:
+        # Wait for camera permission to be granted
+        permission_message.info("Requesting camera access...")
+        st.components.v1.html(
+            """
+            <script>
+                window.addEventListener("message", function(event) {
+                    if (event.data === "permission_granted") {
+                        window.parent.document.getElementById("permission_status").innerText = "Camera access granted.";
+                        window.parent.streamlitSession.setState({"camera_permission": true});
+                    } else if (event.data === "permission_denied") {
+                        window.parent.document.getElementById("permission_status").innerText = "Camera access denied. Please allow camera access.";
+                        window.parent.streamlitSession.setState({"camera_permission": false});
+                    }
+                });
+            </script>
+            """,
+            height=0,
         )
-        if permission_granted:
-            st.session_state.camera_permission = True
-        else:
-            st.warning("Camera access is required to use this feature.")
+    else:
+        # If permission granted, proceed to access the webcam
+        cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            st.error(
+                "Error: Could not access the webcam. Please make sure your webcam is working."
+            )
             return
 
-    # Try to access the webcam
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        st.error(
-            "Error: Could not access the webcam. Please make sure your webcam is working."
-        )
-        return
+        try:
+            while st.session_state.get("is_detecting", False) and st.session_state.get(
+                "is_webcam_active", False
+            ):
+                ret, frame = cap.read()
 
-    try:
-        while st.session_state.get("is_detecting", False) and st.session_state.get(
-            "is_webcam_active", False
-        ):
-            ret, frame = cap.read()
-
-            if not ret:
-                st.warning("Warning: Failed to read frame from the webcam. Retrying...")
-                continue
-
-            try:
-                results = model.predict(source=frame, conf=conf_threshold)
-                detections = results[0]
-
-                # Extract bounding boxes, confidence scores, and class IDs
-                boxes = (
-                    detections.boxes.xyxy.cpu().numpy() if len(detections) > 0 else []
-                )
-                confs = (
-                    detections.boxes.conf.cpu().numpy() if len(detections) > 0 else []
-                )
-                class_ids = (
-                    detections.boxes.cls.cpu().numpy().astype(int)
-                    if len(detections) > 0
-                    else []
-                )
-
-                # Filter based on selected classes
-                if selected_classes:
-                    filtered = [
-                        (box, conf, class_id)
-                        for box, conf, class_id in zip(boxes, confs, class_ids)
-                        if yolo_classes[class_id] in selected_classes
-                    ]
-                    if filtered:
-                        boxes, confs, class_ids = zip(*filtered)
-                    else:
-                        boxes, confs, class_ids = [], [], []
-
-                # Draw bounding boxes and labels on the frame
-                for i, box in enumerate(boxes):
-                    x1, y1, x2, y2 = map(int, box)
-                    label = f"{yolo_classes[class_ids[i]]}: {confs[i]:.2f}"
-                    cv2.rectangle(
-                        frame, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=2
+                if not ret:
+                    st.warning(
+                        "Warning: Failed to read frame from the webcam. Retrying..."
                     )
-                    cv2.putText(
-                        frame,
-                        label,
-                        (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        (255, 255, 255),
-                        2,
+                    continue
+
+                try:
+                    results = model.predict(source=frame, conf=conf_threshold)
+                    detections = results[0]
+
+                    # Extract bounding boxes, confidence scores, and class IDs
+                    boxes = (
+                        detections.boxes.xyxy.cpu().numpy()
+                        if len(detections) > 0
+                        else []
+                    )
+                    confs = (
+                        detections.boxes.conf.cpu().numpy()
+                        if len(detections) > 0
+                        else []
+                    )
+                    class_ids = (
+                        detections.boxes.cls.cpu().numpy().astype(int)
+                        if len(detections) > 0
+                        else []
                     )
 
-                # Display the frame in Streamlit
-                stframe.image(frame, channels="BGR")
+                    # Filter based on selected classes
+                    if selected_classes:
+                        filtered = [
+                            (box, conf, class_id)
+                            for box, conf, class_id in zip(boxes, confs, class_ids)
+                            if yolo_classes[class_id] in selected_classes
+                        ]
+                        if filtered:
+                            boxes, confs, class_ids = zip(*filtered)
+                        else:
+                            boxes, confs, class_ids = [], [], []
 
-            except Exception as e:
-                st.error(f"Error during model prediction: {str(e)}")
+                    # Draw bounding boxes and labels on the frame
+                    for i, box in enumerate(boxes):
+                        x1, y1, x2, y2 = map(int, box)
+                        label = f"{yolo_classes[class_ids[i]]}: {confs[i]:.2f}"
+                        cv2.rectangle(
+                            frame, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=2
+                        )
+                        cv2.putText(
+                            frame,
+                            label,
+                            (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5,
+                            (255, 255, 255),
+                            2,
+                        )
 
-    finally:
-        # Ensure resources are properly released
-        cap.release()
-        cv2.destroyAllWindows()
+                    # Display the frame in Streamlit
+                    stframe.image(frame, channels="BGR")
+
+                except Exception as e:
+                    st.error(f"Error during model prediction: {str(e)}")
+
+        finally:
+            # Ensure resources are properly released
+            cap.release()
+            cv2.destroyAllWindows()
 
 
 # Function for object detection on uploaded video
