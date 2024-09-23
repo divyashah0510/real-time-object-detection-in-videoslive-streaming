@@ -181,37 +181,37 @@ if st.session_state.is_detecting:
 else:
     st.title("Object Detection")
     st.info("Upload an image or video, or start the webcam for object detection.")
-
-    st.write("""
-        ### What is YOLO?
-        YOLO (You Only Look Once) is a state-of-the-art, real-time object detection system that excels in speed and accuracy. It processes images in a single pass, making it highly efficient for applications requiring rapid object detection.
-
-        ### How YOLO Works
-        YOLO divides the input image into a grid and predicts bounding boxes and class probabilities for each grid cell. This allows it to identify multiple objects simultaneously, making it suitable for real-time scenarios.
-
-        ### Training YOLO
-        To train a YOLO model on your own dataset, follow these key steps:
-
-        1. **Dataset Preparation**:
-            - Collect and annotate your images with bounding box coordinates and class labels. You can use annotation tools like LabelImg or Roboflow.
-
-        2. **Environment Setup**:
-            - Install the necessary libraries and dependencies as specified in the Ultralytics repository. This typically involves using Python and libraries like PyTorch.
-
-        3. **Model Configuration**:
-            - Choose a model architecture (e.g., YOLOv5) and configure it based on your dataset’s requirements. This includes setting the number of classes and adjusting the input image size.
-
-        4. **Training**:
-            - Use the command line interface to start the training process. The typical command looks like this:
-              ```bash
-              python train.py --img 640 --batch 16 --epochs 50 --data your_dataset.yaml --weights yolov5s.pt
-              ```
-            - Here, you specify parameters like image size, batch size, number of epochs, dataset configuration, and pre-trained weights.
-
-        5. **Evaluation**:
-            - After training, evaluate the model's performance using validation data. This step helps in understanding the accuracy and making necessary adjustments.
-
-        For detailed instructions, examples, and best practices, please refer to the [Ultralytics YOLO Training Documentation](https://docs.ultralytics.com/modes/train/).
-
-        Now, go ahead and upload your image or video, or start the webcam to see YOLO in action!
-    """)
+    #
+    # st.write("""
+    #     ### What is YOLO?
+    #     YOLO (You Only Look Once) is a state-of-the-art, real-time object detection system that excels in speed and accuracy. It processes images in a single pass, making it highly efficient for applications requiring rapid object detection.
+    #
+    #     ### How YOLO Works
+    #     YOLO divides the input image into a grid and predicts bounding boxes and class probabilities for each grid cell. This allows it to identify multiple objects simultaneously, making it suitable for real-time scenarios.
+    #
+    #     ### Training YOLO
+    #     To train a YOLO model on your own dataset, follow these key steps:
+    #
+    #     1. **Dataset Preparation**:
+    #         - Collect and annotate your images with bounding box coordinates and class labels. You can use annotation tools like LabelImg or Roboflow.
+    #
+    #     2. **Environment Setup**:
+    #         - Install the necessary libraries and dependencies as specified in the Ultralytics repository. This typically involves using Python and libraries like PyTorch.
+    #
+    #     3. **Model Configuration**:
+    #         - Choose a model architecture (e.g., YOLOv5) and configure it based on your dataset’s requirements. This includes setting the number of classes and adjusting the input image size.
+    #
+    #     4. **Training**:
+    #         - Use the command line interface to start the training process. The typical command looks like this:
+    #           ```bash
+    #           python train.py --img 640 --batch 16 --epochs 50 --data your_dataset.yaml --weights yolov5s.pt
+    #           ```
+    #         - Here, you specify parameters like image size, batch size, number of epochs, dataset configuration, and pre-trained weights.
+    #
+    #     5. **Evaluation**:
+    #         - After training, evaluate the model's performance using validation data. This step helps in understanding the accuracy and making necessary adjustments.
+    #
+    #     For detailed instructions, examples, and best practices, please refer to the [Ultralytics YOLO Training Documentation](https://docs.ultralytics.com/modes/train/).
+    #
+    #     Now, go ahead and upload your image or video, or start the webcam to see YOLO in action!
+    # """)
