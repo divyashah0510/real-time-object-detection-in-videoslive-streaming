@@ -5,71 +5,194 @@ import tempfile
 from PIL import Image
 import numpy as np
 
+
 # Load YOLO model
-model = YOLO('models/yolov10s.pt')
+model = YOLO("models/yolov10s.pt")
 
 # YOLO class names
 yolo_classes = [
-    'person', 'bicycle', 'car', 'motorbike', 'aeroplane', 'bus', 'train', 'truck',
-    'boat', 'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench',
-    'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra',
-    'giraffe', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
-    'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove',
-    'skateboard', 'surfboard', 'tennis racket', 'bottle', 'wine glass', 'cup',
-    'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich', 'orange',
-    'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair', 'sofa',
-    'pottedplant', 'bed', 'diningtable', 'toilet', 'TV monitor', 'laptop', 'mouse',
-    'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
-    'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier',
-    'toothbrush'
+    "person",
+    "bicycle",
+    "car",
+    "motorbike",
+    "aeroplane",
+    "bus",
+    "train",
+    "truck",
+    "boat",
+    "traffic light",
+    "fire hydrant",
+    "stop sign",
+    "parking meter",
+    "bench",
+    "bird",
+    "cat",
+    "dog",
+    "horse",
+    "sheep",
+    "cow",
+    "elephant",
+    "bear",
+    "zebra",
+    "giraffe",
+    "backpack",
+    "umbrella",
+    "handbag",
+    "tie",
+    "suitcase",
+    "frisbee",
+    "skis",
+    "snowboard",
+    "sports ball",
+    "kite",
+    "baseball bat",
+    "baseball glove",
+    "skateboard",
+    "surfboard",
+    "tennis racket",
+    "bottle",
+    "wine glass",
+    "cup",
+    "fork",
+    "knife",
+    "spoon",
+    "bowl",
+    "banana",
+    "apple",
+    "sandwich",
+    "orange",
+    "broccoli",
+    "carrot",
+    "hot dog",
+    "pizza",
+    "donut",
+    "cake",
+    "chair",
+    "sofa",
+    "pottedplant",
+    "bed",
+    "diningtable",
+    "toilet",
+    "TV monitor",
+    "laptop",
+    "mouse",
+    "remote",
+    "keyboard",
+    "cell phone",
+    "microwave",
+    "oven",
+    "toaster",
+    "sink",
+    "refrigerator",
+    "book",
+    "clock",
+    "vase",
+    "scissors",
+    "teddy bear",
+    "hair drier",
+    "toothbrush",
 ]
 
-st.set_page_config(page_icon="🔍", layout="wide", initial_sidebar_state="expanded", page_title="Object Detection")
+st.set_page_config(
+    page_icon="🔍",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    page_title="Object Detection",
+)
 
 # Initialize session state variables
-if 'is_detecting' not in st.session_state:
+if "is_detecting" not in st.session_state:
     st.session_state.is_detecting = False
-if 'is_webcam_active' not in st.session_state:
+if "is_webcam_active" not in st.session_state:
     st.session_state.is_webcam_active = False
 
 
 # Function for live object detection using webcam
 def live_streaming(conf_threshold, selected_classes):
     stframe = st.empty()
+
+    # Try to access the webcam and handle failure gracefully
     cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        st.error("Error: Could not access the webcam.")
+        return
 
-    while st.session_state.is_detecting and st.session_state.is_webcam_active:
-        ret, frame = cap.read()
-        if not ret:
-            break
+    try:
+        while st.session_state.get("is_detecting", False) and st.session_state.get(
+            "is_webcam_active", False
+        ):
+            ret, frame = cap.read()
 
-        results = model.predict(source=frame, conf=conf_threshold)
-        detections = results[0]
+            # Handle webcam frame read failure
+            if not ret:
+                st.error("Error: Failed to read frame from the webcam.")
+                break
 
-        boxes = detections.boxes.xyxy.cpu().numpy()
-        confs = detections.boxes.conf.cpu().numpy()
-        class_ids = detections.boxes.cls.cpu().numpy().astype(int)
+            # Run model prediction and handle potential errors in results
+            try:
+                results = model.predict(source=frame, conf=conf_threshold)
+                detections = results[0]
+            except Exception as e:
+                st.error(f"Error during model prediction: {str(e)}")
+                continue
 
-        if selected_classes:
-            filtered = [(box, conf, class_id) for box, conf, class_id in zip(boxes, confs, class_ids)
-                        if yolo_classes[class_id] in selected_classes]
-            if filtered:
-                boxes, confs, class_ids = zip(*filtered)
-            else:
-                boxes, confs, class_ids = [], [], []
+            # Extract bounding boxes, confidence scores, and class IDs
+            try:
+                boxes = (
+                    detections.boxes.xyxy.cpu().numpy() if len(detections) > 0 else []
+                )
+                confs = (
+                    detections.boxes.conf.cpu().numpy() if len(detections) > 0 else []
+                )
+                class_ids = (
+                    detections.boxes.cls.cpu().numpy().astype(int)
+                    if len(detections) > 0
+                    else []
+                )
+            except AttributeError as e:
+                st.warning(f"Warning: Issue in detection extraction - {str(e)}")
+                continue
 
-        for i, box in enumerate(boxes):
-            x1, y1, x2, y2 = map(int, box)
-            label = f"{yolo_classes[class_ids[i]]}: {confs[i]:.2f}"
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=2)
-            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-            center_x, center_y = (x1 + x2) // 2, (y1 + y2) // 2
-            cv2.circle(frame, (center_x, center_y), 5, (0, 0, 255), -1)
+            # Filter based on selected classes
+            if selected_classes:
+                filtered = [
+                    (box, conf, class_id)
+                    for box, conf, class_id in zip(boxes, confs, class_ids)
+                    if yolo_classes[class_id] in selected_classes
+                ]
+                if filtered:
+                    boxes, confs, class_ids = zip(*filtered)
+                else:
+                    boxes, confs, class_ids = [], [], []
 
-        stframe.image(frame, channels="BGR")
+            # Draw bounding boxes and labels on the frame
+            for i, box in enumerate(boxes):
+                x1, y1, x2, y2 = map(int, box)
+                label = f"{yolo_classes[class_ids[i]]}: {confs[i]:.2f}"
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=2)
+                cv2.putText(
+                    frame,
+                    label,
+                    (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (255, 255, 255),
+                    2,
+                )
+                # Draw center point
+                center_x, center_y = (x1 + x2) // 2, (y1 + y2) // 2
+                cv2.circle(frame, (center_x, center_y), 5, (0, 0, 255), -1)
 
-    cap.release()
-    cv2.destroyAllWindows()
+            # Display the frame in Streamlit
+            stframe.image(frame, channels="BGR")
+
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+
+    finally:
+        # Ensure resources are properly released
+        cap.release()
+        cv2.destroyAllWindows()
 
 
 # Function for object detection on uploaded video
@@ -94,8 +217,11 @@ def video_streaming(uploaded_file, conf_threshold, selected_classes):
         class_ids = detections.boxes.cls.cpu().numpy().astype(int)
 
         if selected_classes:
-            filtered = [(box, conf, class_id) for box, conf, class_id in zip(boxes, confs, class_ids)
-                        if yolo_classes[class_id] in selected_classes]
+            filtered = [
+                (box, conf, class_id)
+                for box, conf, class_id in zip(boxes, confs, class_ids)
+                if yolo_classes[class_id] in selected_classes
+            ]
             if filtered:
                 boxes, confs, class_ids = zip(*filtered)
             else:
@@ -105,7 +231,15 @@ def video_streaming(uploaded_file, conf_threshold, selected_classes):
             x1, y1, x2, y2 = map(int, box)
             label = f"{yolo_classes[class_ids[i]]}: {confs[i]:.2f}"
             cv2.rectangle(frame, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=2)
-            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+            cv2.putText(
+                frame,
+                label,
+                (x1, y1 - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                2,
+            )
 
         stframe.image(frame, channels="BGR")
 
@@ -126,8 +260,11 @@ def image_detection(uploaded_file, conf_threshold, selected_classes):
     class_ids = detections.boxes.cls.cpu().numpy().astype(int)
 
     if selected_classes:
-        filtered = [(box, conf, class_id) for box, conf, class_id in zip(boxes, confs, class_ids)
-                    if yolo_classes[class_id] in selected_classes]
+        filtered = [
+            (box, conf, class_id)
+            for box, conf, class_id in zip(boxes, confs, class_ids)
+            if yolo_classes[class_id] in selected_classes
+        ]
         if filtered:
             boxes, confs, class_ids = zip(*filtered)
         else:
@@ -137,7 +274,15 @@ def image_detection(uploaded_file, conf_threshold, selected_classes):
         x1, y1, x2, y2 = map(int, box)
         label = f"{yolo_classes[class_ids[i]]}: {confs[i]:.2f}"
         cv2.rectangle(image_cv, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=2)
-        cv2.putText(image_cv, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        cv2.putText(
+            image_cv,
+            label,
+            (x1, y1 - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 255, 255),
+            2,
+        )
 
     st.image(image_cv, channels="BGR")
 
@@ -146,21 +291,33 @@ def image_detection(uploaded_file, conf_threshold, selected_classes):
 with st.sidebar:
     st.title("Object Detection Settings " + "⚙️")
     confidence_threshold = st.slider("Confidence Threshold", 0.0, 1.0, 0.3)
-    selected_classes = st.multiselect("Select classes for object detection", yolo_classes)
+    selected_classes = st.multiselect(
+        "Select classes for object detection", yolo_classes
+    )
 
     # Unified file uploader for both images and videos
-    uploaded_file = st.file_uploader("Upload an image or video " + "📤",
-                                     type=["mp4", "mov", "avi", "m4v", "jpg", "png", "jpeg"])
+    uploaded_file = st.file_uploader(
+        "Upload an image or video " + "📤",
+        type=["mp4", "mov", "avi", "m4v", "jpg", "png", "jpeg"],
+    )
 
-    if st.button("Use Webcam 📷" if not st.session_state.is_webcam_active else "Stop Webcam 🛑"):
+    if st.button(
+        "Use Webcam 📷" if not st.session_state.is_webcam_active else "Stop Webcam 🛑"
+    ):
         st.session_state.is_webcam_active = not st.session_state.is_webcam_active
         if st.session_state.is_webcam_active:
             st.session_state.is_detecting = True
         else:
             st.session_state.is_detecting = False
 
-    detect_button = st.button("Start Detection ▶️" if not st.session_state.is_detecting else "Stop Detection 🛑",
-                              disabled=(not uploaded_file and not st.session_state.is_webcam_active))
+    detect_button = st.button(
+        (
+            "Start Detection ▶️"
+            if not st.session_state.is_detecting
+            else "Stop Detection 🛑"
+        ),
+        disabled=(not uploaded_file and not st.session_state.is_webcam_active),
+    )
 
     if detect_button:
         st.session_state.is_detecting = not st.session_state.is_detecting
@@ -171,11 +328,11 @@ if st.session_state.is_detecting:
         st.info("Detecting objects using webcam...")
         live_streaming(confidence_threshold, selected_classes)
     elif uploaded_file:
-        file_extension = uploaded_file.name.split('.')[-1].lower()
-        if file_extension in ['mp4', 'mov', 'avi', 'm4v']:
+        file_extension = uploaded_file.name.split(".")[-1].lower()
+        if file_extension in ["mp4", "mov", "avi", "m4v"]:
             st.info("Detecting objects in video...")
             video_streaming(uploaded_file, confidence_threshold, selected_classes)
-        elif file_extension in ['jpg', 'jpeg', 'png']:
+        elif file_extension in ["jpg", "jpeg", "png"]:
             st.info("Detecting objects in image...")
             image_detection(uploaded_file, confidence_threshold, selected_classes)
 else:
