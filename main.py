@@ -107,14 +107,51 @@ if "is_webcam_active" not in st.session_state:
     st.session_state.is_webcam_active = False
 
 
+# Request camera permission using JavaScript
+def request_camera_permission():
+    # JavaScript to request camera permission
+    st.components.v1.html(
+        """
+    <script>
+        async function requestCamera() {
+            try {
+                await navigator.mediaDevices.getUserMedia({ video: true });
+                return true; // Permission granted
+            } catch (error) {
+                console.error("Error accessing camera: ", error);
+                return false; // Permission denied
+            }
+        }
+    </script>
+    """,
+        height=0,
+    )
+
+
 # Function for live object detection using webcam
 def live_streaming(conf_threshold, selected_classes):
     stframe = st.empty()
 
-    # Try to access the webcam and handle failure gracefully
+    # Request camera permission
+    request_camera_permission()
+    permission_granted = st.session_state.get("camera_permission", False)
+
+    if permission_granted is None:
+        permission_granted = st.session_state.camera_permission = st.button(
+            "Enable Camera Access"
+        )
+        if permission_granted:
+            st.session_state.camera_permission = True
+        else:
+            st.warning("Camera access is required to use this feature.")
+            return
+
+    # Try to access the webcam
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        st.error("Error: Could not access the webcam.")
+        st.error(
+            "Error: Could not access the webcam. Please make sure your webcam is working."
+        )
         return
 
     try:
@@ -123,21 +160,15 @@ def live_streaming(conf_threshold, selected_classes):
         ):
             ret, frame = cap.read()
 
-            # Handle webcam frame read failure
             if not ret:
-                st.error("Error: Failed to read frame from the webcam.")
-                break
+                st.warning("Warning: Failed to read frame from the webcam. Retrying...")
+                continue
 
-            # Run model prediction and handle potential errors in results
             try:
                 results = model.predict(source=frame, conf=conf_threshold)
                 detections = results[0]
-            except Exception as e:
-                st.error(f"Error during model prediction: {str(e)}")
-                continue
 
-            # Extract bounding boxes, confidence scores, and class IDs
-            try:
+                # Extract bounding boxes, confidence scores, and class IDs
                 boxes = (
                     detections.boxes.xyxy.cpu().numpy() if len(detections) > 0 else []
                 )
@@ -149,45 +180,41 @@ def live_streaming(conf_threshold, selected_classes):
                     if len(detections) > 0
                     else []
                 )
-            except AttributeError as e:
-                st.warning(f"Warning: Issue in detection extraction - {str(e)}")
-                continue
 
-            # Filter based on selected classes
-            if selected_classes:
-                filtered = [
-                    (box, conf, class_id)
-                    for box, conf, class_id in zip(boxes, confs, class_ids)
-                    if yolo_classes[class_id] in selected_classes
-                ]
-                if filtered:
-                    boxes, confs, class_ids = zip(*filtered)
-                else:
-                    boxes, confs, class_ids = [], [], []
+                # Filter based on selected classes
+                if selected_classes:
+                    filtered = [
+                        (box, conf, class_id)
+                        for box, conf, class_id in zip(boxes, confs, class_ids)
+                        if yolo_classes[class_id] in selected_classes
+                    ]
+                    if filtered:
+                        boxes, confs, class_ids = zip(*filtered)
+                    else:
+                        boxes, confs, class_ids = [], [], []
 
-            # Draw bounding boxes and labels on the frame
-            for i, box in enumerate(boxes):
-                x1, y1, x2, y2 = map(int, box)
-                label = f"{yolo_classes[class_ids[i]]}: {confs[i]:.2f}"
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=2)
-                cv2.putText(
-                    frame,
-                    label,
-                    (x1, y1 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (255, 255, 255),
-                    2,
-                )
-                # Draw center point
-                center_x, center_y = (x1 + x2) // 2, (y1 + y2) // 2
-                cv2.circle(frame, (center_x, center_y), 5, (0, 0, 255), -1)
+                # Draw bounding boxes and labels on the frame
+                for i, box in enumerate(boxes):
+                    x1, y1, x2, y2 = map(int, box)
+                    label = f"{yolo_classes[class_ids[i]]}: {confs[i]:.2f}"
+                    cv2.rectangle(
+                        frame, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=2
+                    )
+                    cv2.putText(
+                        frame,
+                        label,
+                        (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        (255, 255, 255),
+                        2,
+                    )
 
-            # Display the frame in Streamlit
-            stframe.image(frame, channels="BGR")
+                # Display the frame in Streamlit
+                stframe.image(frame, channels="BGR")
 
-    except Exception as e:
-        st.error(f"Error: {str(e)}")
+            except Exception as e:
+                st.error(f"Error during model prediction: {str(e)}")
 
     finally:
         # Ensure resources are properly released
