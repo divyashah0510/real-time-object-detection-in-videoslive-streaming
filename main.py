@@ -7,7 +7,7 @@ import numpy as np
 
 
 # Load YOLO model
-model = YOLO("models/yolov10s.pt")
+model = YOLO("models/yolov10m.pt")
 
 # YOLO class names
 yolo_classes = [
@@ -108,25 +108,25 @@ if "is_webcam_active" not in st.session_state:
 
 
 # Function to request camera permission using JavaScript
-def request_camera_permission():
-    # JavaScript to request camera permission
-    st.components.v1.html(
-        """
-        <script>
-            async function requestCamera() {
-                try {
-                    await navigator.mediaDevices.getUserMedia({ video: true });
-                    window.parent.postMessage("permission_granted", "*");
-                } catch (error) {
-                    console.error("Error accessing camera: ", error);
-                    window.parent.postMessage("permission_denied", "*");
-                }
-            }
-            requestCamera();
-        </script>
-        """,
-        height=0,
-    )
+# def request_camera_permission():
+#     # JavaScript to request camera permission
+#     st.components.v1.html(
+#         """
+#         <script>
+#             async function requestCamera() {
+#                 try {
+#                     await navigator.mediaDevices.getUserMedia({ video: true });
+#                     window.parent.postMessage("permission_granted", "*");
+#                 } catch (error) {
+#                     console.error("Error accessing camera: ", error);
+#                     window.parent.postMessage("permission_denied", "*");
+#                 }
+#             }
+#             requestCamera();
+#         </script>
+#         """,
+#         height=0,
+#     )
 
 
 # Function for live object detection using webcam
@@ -134,46 +134,46 @@ def live_streaming(conf_threshold, selected_classes):
     stframe = st.empty()
 
     # Request camera permission
-    request_camera_permission()
+    # request_camera_permission()
 
     # Wait for the JavaScript to set camera permission
-    if "camera_permission" not in st.session_state:
-        st.session_state.camera_permission = False
-
-    # Create a placeholder for message
-    permission_message = st.empty()
-
-    # Check for messages from the JavaScript
-    if st.session_state.camera_permission is False:
-        # Wait for camera permission to be granted
-        permission_message.info("Requesting camera access...")
-        st.components.v1.html(
-            """
-            <script>
-                window.addEventListener("message", function(event) {
-                    if (event.data === "permission_granted") {
-                        window.parent.document.getElementById("permission_status").innerText = "Camera access granted.";
-                        window.parent.streamlitSession.setState({"camera_permission": true});
-                    } else if (event.data === "permission_denied") {
-                        window.parent.document.getElementById("permission_status").innerText = "Camera access denied. Please allow camera access.";
-                        window.parent.streamlitSession.setState({"camera_permission": false});
-                    }
-                });
-            </script>
-            """,
-            height=0,
-        )
-    else:
+    # if "camera_permission" not in st.session_state:
+    #     st.session_state.camera_permission = False
+    #
+    # # Create a placeholder for message
+    # permission_message = st.empty()
+    #
+    # # Check for messages from the JavaScript
+    # if st.session_state.camera_permission is False:
+    #     # Wait for camera permission to be granted
+    #     permission_message.info("Requesting camera access...")
+    #     st.components.v1.html(
+    #         """
+    #         <script>
+    #             window.addEventListener("message", function(event) {
+    #                 if (event.data === "permission_granted") {
+    #                     window.parent.document.getElementById("permission_status").innerText = "Camera access granted.";
+    #                     window.parent.streamlitSession.setState({"camera_permission": true});
+    #                 } else if (event.data === "permission_denied") {
+    #                     window.parent.document.getElementById("permission_status").innerText = "Camera access denied. Please allow camera access.";
+    #                     window.parent.streamlitSession.setState({"camera_permission": false});
+    #                 }
+    #             });
+    #         </script>
+    #         """,
+    #         height=0,
+    #     )
+    # else:
         # If permission granted, proceed to access the webcam
-        cap = cv2.VideoCapture(0)
-        if not cap.isOpened():
-            st.error(
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        st.error(
                 "Error: Could not access the webcam. Please make sure your webcam is working."
             )
-            return
+        return
 
-        try:
-            while st.session_state.get("is_detecting", False) and st.session_state.get(
+    try:
+        while st.session_state.get("is_detecting", False) and st.session_state.get(
                 "is_webcam_active", False
             ):
                 ret, frame = cap.read()
@@ -240,13 +240,12 @@ def live_streaming(conf_threshold, selected_classes):
                 except Exception as e:
                     st.error(f"Error during model prediction: {str(e)}")
 
-        finally:
+
+    finally:
             # Ensure resources are properly released
-            cap.release()
-            cv2.destroyAllWindows()
+        cap.release()
+        cv2.destroyAllWindows()
 
-
-# Function for object detection on uploaded video
 def video_streaming(uploaded_file, conf_threshold, selected_classes):
     stframe = st.empty()
     with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
@@ -296,7 +295,6 @@ def video_streaming(uploaded_file, conf_threshold, selected_classes):
 
     cap.release()
     cv2.destroyAllWindows()
-
 
 # Function for object detection on uploaded image
 def image_detection(uploaded_file, conf_threshold, selected_classes):
@@ -389,37 +387,37 @@ if st.session_state.is_detecting:
 else:
     st.title("Object Detection")
     st.info("Upload an image or video, or start the webcam for object detection.")
-    #
-    # st.write("""
-    #     ### What is YOLO?
-    #     YOLO (You Only Look Once) is a state-of-the-art, real-time object detection system that excels in speed and accuracy. It processes images in a single pass, making it highly efficient for applications requiring rapid object detection.
-    #
-    #     ### How YOLO Works
-    #     YOLO divides the input image into a grid and predicts bounding boxes and class probabilities for each grid cell. This allows it to identify multiple objects simultaneously, making it suitable for real-time scenarios.
-    #
-    #     ### Training YOLO
-    #     To train a YOLO model on your own dataset, follow these key steps:
-    #
-    #     1. **Dataset Preparation**:
-    #         - Collect and annotate your images with bounding box coordinates and class labels. You can use annotation tools like LabelImg or Roboflow.
-    #
-    #     2. **Environment Setup**:
-    #         - Install the necessary libraries and dependencies as specified in the Ultralytics repository. This typically involves using Python and libraries like PyTorch.
-    #
-    #     3. **Model Configuration**:
-    #         - Choose a model architecture (e.g., YOLOv5) and configure it based on your dataset’s requirements. This includes setting the number of classes and adjusting the input image size.
-    #
-    #     4. **Training**:
-    #         - Use the command line interface to start the training process. The typical command looks like this:
-    #           ```bash
-    #           python train.py --img 640 --batch 16 --epochs 50 --data your_dataset.yaml --weights yolov5s.pt
-    #           ```
-    #         - Here, you specify parameters like image size, batch size, number of epochs, dataset configuration, and pre-trained weights.
-    #
-    #     5. **Evaluation**:
-    #         - After training, evaluate the model's performance using validation data. This step helps in understanding the accuracy and making necessary adjustments.
-    #
-    #     For detailed instructions, examples, and best practices, please refer to the [Ultralytics YOLO Training Documentation](https://docs.ultralytics.com/modes/train/).
-    #
-    #     Now, go ahead and upload your image or video, or start the webcam to see YOLO in action!
-    # """)
+
+    st.write("""
+        ### What is YOLO?
+        YOLO (You Only Look Once) is a state-of-the-art, real-time object detection system that excels in speed and accuracy. It processes images in a single pass, making it highly efficient for applications requiring rapid object detection.
+
+        ### How YOLO Works
+        YOLO divides the input image into a grid and predicts bounding boxes and class probabilities for each grid cell. This allows it to identify multiple objects simultaneously, making it suitable for real-time scenarios.
+
+        ### Training YOLO
+        To train a YOLO model on your own dataset, follow these key steps:
+
+        1. **Dataset Preparation**:
+            - Collect and annotate your images with bounding box coordinates and class labels. You can use annotation tools like LabelImg or Roboflow.
+
+        2. **Environment Setup**:
+            - Install the necessary libraries and dependencies as specified in the Ultralytics repository. This typically involves using Python and libraries like PyTorch.
+
+        3. **Model Configuration**:
+            - Choose a model architecture (e.g., YOLOv5) and configure it based on your dataset’s requirements. This includes setting the number of classes and adjusting the input image size.
+
+        4. **Training**:
+            - Use the command line interface to start the training process. The typical command looks like this:
+              ```bash
+              python train.py --img 640 --batch 16 --epochs 50 --data your_dataset.yaml --weights yolov10s.pt
+              ```
+            - Here, you specify parameters like image size, batch size, number of epochs, dataset configuration, and pre-trained weights.
+
+        5. **Evaluation**:
+            - After training, evaluate the model's performance using validation data. This step helps in understanding the accuracy and making necessary adjustments.
+
+        For detailed instructions, examples, and best practices, please refer to the [Ultralytics YOLO Training Documentation](https://docs.ultralytics.com/models/yolov10/train/).
+
+        Now, go ahead and upload your image or video, or start the webcam to see YOLO in action!
+    """)
