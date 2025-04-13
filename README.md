@@ -27,3 +27,6 @@ The video feed from the webcam will be displayed along with the detected objects
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Live Demo
+You can see a live demo of the project [here](https://real-time-object-detection-in-video-live-streaming.streamlit.app/).

@@ -107,144 +107,84 @@ if "is_webcam_active" not in st.session_state:
     st.session_state.is_webcam_active = False
 
 
-# Function to request camera permission using JavaScript
-# def request_camera_permission():
-#     # JavaScript to request camera permission
-#     st.components.v1.html(
-#         """
-#         <script>
-#             async function requestCamera() {
-#                 try {
-#                     await navigator.mediaDevices.getUserMedia({ video: true });
-#                     window.parent.postMessage("permission_granted", "*");
-#                 } catch (error) {
-#                     console.error("Error accessing camera: ", error);
-#                     window.parent.postMessage("permission_denied", "*");
-#                 }
-#             }
-#             requestCamera();
-#         </script>
-#         """,
-#         height=0,
-#     )
-
-
 # Function for live object detection using webcam
 def live_streaming(conf_threshold, selected_classes):
     stframe = st.empty()
 
-    # Request camera permission
-    # request_camera_permission()
-
-    # Wait for the JavaScript to set camera permission
-    # if "camera_permission" not in st.session_state:
-    #     st.session_state.camera_permission = False
-    #
-    # # Create a placeholder for message
-    # permission_message = st.empty()
-    #
-    # # Check for messages from the JavaScript
-    # if st.session_state.camera_permission is False:
-    #     # Wait for camera permission to be granted
-    #     permission_message.info("Requesting camera access...")
-    #     st.components.v1.html(
-    #         """
-    #         <script>
-    #             window.addEventListener("message", function(event) {
-    #                 if (event.data === "permission_granted") {
-    #                     window.parent.document.getElementById("permission_status").innerText = "Camera access granted.";
-    #                     window.parent.streamlitSession.setState({"camera_permission": true});
-    #                 } else if (event.data === "permission_denied") {
-    #                     window.parent.document.getElementById("permission_status").innerText = "Camera access denied. Please allow camera access.";
-    #                     window.parent.streamlitSession.setState({"camera_permission": false});
-    #                 }
-    #             });
-    #         </script>
-    #         """,
-    #         height=0,
-    #     )
-    # else:
-        # If permission granted, proceed to access the webcam
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         st.error(
-                "Error: Could not access the webcam. Please make sure your webcam is working."
-            )
+            "Error: Could not access the webcam. Please make sure your webcam is working."
+        )
         return
 
     try:
         while st.session_state.get("is_detecting", False) and st.session_state.get(
-                "is_webcam_active", False
-            ):
-                ret, frame = cap.read()
+            "is_webcam_active", False
+        ):
+            ret, frame = cap.read()
 
-                if not ret:
-                    st.warning(
-                        "Warning: Failed to read frame from the webcam. Retrying..."
+            if not ret:
+                st.warning("Warning: Failed to read frame from the webcam. Retrying...")
+                continue
+
+            try:
+                results = model.predict(source=frame, conf=conf_threshold)
+                detections = results[0]
+
+                # Extract bounding boxes, confidence scores, and class IDs
+                boxes = (
+                    detections.boxes.xyxy.cpu().numpy() if len(detections) > 0 else []
+                )
+                confs = (
+                    detections.boxes.conf.cpu().numpy() if len(detections) > 0 else []
+                )
+                class_ids = (
+                    detections.boxes.cls.cpu().numpy().astype(int)
+                    if len(detections) > 0
+                    else []
+                )
+
+                # Filter based on selected classes
+                if selected_classes:
+                    filtered = [
+                        (box, conf, class_id)
+                        for box, conf, class_id in zip(boxes, confs, class_ids)
+                        if yolo_classes[class_id] in selected_classes
+                    ]
+                    if filtered:
+                        boxes, confs, class_ids = zip(*filtered)
+                    else:
+                        boxes, confs, class_ids = [], [], []
+
+                # Draw bounding boxes and labels on the frame
+                for i, box in enumerate(boxes):
+                    x1, y1, x2, y2 = map(int, box)
+                    label = f"{yolo_classes[class_ids[i]]}: {confs[i]:.2f}"
+                    cv2.rectangle(
+                        frame, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=2
                     )
-                    continue
-
-                try:
-                    results = model.predict(source=frame, conf=conf_threshold)
-                    detections = results[0]
-
-                    # Extract bounding boxes, confidence scores, and class IDs
-                    boxes = (
-                        detections.boxes.xyxy.cpu().numpy()
-                        if len(detections) > 0
-                        else []
-                    )
-                    confs = (
-                        detections.boxes.conf.cpu().numpy()
-                        if len(detections) > 0
-                        else []
-                    )
-                    class_ids = (
-                        detections.boxes.cls.cpu().numpy().astype(int)
-                        if len(detections) > 0
-                        else []
+                    cv2.putText(
+                        frame,
+                        label,
+                        (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        (255, 255, 255),
+                        2,
                     )
 
-                    # Filter based on selected classes
-                    if selected_classes:
-                        filtered = [
-                            (box, conf, class_id)
-                            for box, conf, class_id in zip(boxes, confs, class_ids)
-                            if yolo_classes[class_id] in selected_classes
-                        ]
-                        if filtered:
-                            boxes, confs, class_ids = zip(*filtered)
-                        else:
-                            boxes, confs, class_ids = [], [], []
+                # Display the frame in Streamlit
+                stframe.image(frame, channels="BGR")
 
-                    # Draw bounding boxes and labels on the frame
-                    for i, box in enumerate(boxes):
-                        x1, y1, x2, y2 = map(int, box)
-                        label = f"{yolo_classes[class_ids[i]]}: {confs[i]:.2f}"
-                        cv2.rectangle(
-                            frame, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=2
-                        )
-                        cv2.putText(
-                            frame,
-                            label,
-                            (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.5,
-                            (255, 255, 255),
-                            2,
-                        )
-
-                    # Display the frame in Streamlit
-                    stframe.image(frame, channels="BGR")
-
-                except Exception as e:
-                    st.error(f"Error during model prediction: {str(e)}")
-
+            except Exception as e:
+                st.error(f"Error during model prediction: {str(e)}")
 
     finally:
-            # Ensure resources are properly released
+        # Ensure resources are properly released
         cap.release()
         cv2.destroyAllWindows()
+
 
 def video_streaming(uploaded_file, conf_threshold, selected_classes):
     stframe = st.empty()
@@ -296,6 +236,7 @@ def video_streaming(uploaded_file, conf_threshold, selected_classes):
     cap.release()
     cv2.destroyAllWindows()
 
+
 # Function for object detection on uploaded image
 def image_detection(uploaded_file, conf_threshold, selected_classes):
     image = Image.open(uploaded_file)
@@ -339,7 +280,7 @@ def image_detection(uploaded_file, conf_threshold, selected_classes):
 # Sidebar controls for user input
 with st.sidebar:
     st.title("Object Detection Settings " + "⚙️")
-    confidence_threshold = st.slider("Confidence Threshold", 0.0, 1.0, 0.3)
+    confidence_threshold = st.slider("Confidence Threshold",0.0,1.0,0.2)
     selected_classes = st.multiselect(
         "Select classes for object detection", yolo_classes
     )
@@ -388,7 +329,8 @@ else:
     st.title("Object Detection")
     st.info("Upload an image or video, or start the webcam for object detection.")
 
-    st.write("""
+    st.write(
+        """
         ### What is YOLO?
         YOLO (You Only Look Once) is a state-of-the-art, real-time object detection system that excels in speed and accuracy. It processes images in a single pass, making it highly efficient for applications requiring rapid object detection.
 
@@ -420,4 +362,5 @@ else:
         For detailed instructions, examples, and best practices, please refer to the [Ultralytics YOLO Training Documentation](https://docs.ultralytics.com/models/yolov10/train/).
 
         Now, go ahead and upload your image or video, or start the webcam to see YOLO in action!
-    """)
+    """
+    )
